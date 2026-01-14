@@ -12,7 +12,7 @@
                         <li><a href="student-registration.php">Nomination</a></li>
                         <li><a href="manage-course-schedule.php">Waiting List</a></li>
                         <li><a href="enroll-history.php">Course Run</a></li>
-                        <li><a href="user-log.php">Student Logs </a></li>
+                        <li><a href="billing.php">Billing</a></li>
                         <!-- <li><a href="news.php">News </a></li> -->
                         <li><a href="logout.php">Logout</a></li>
 

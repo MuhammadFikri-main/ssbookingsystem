@@ -306,7 +306,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                 <a href="manage-course-schedule.php" class="btn btn-success btn-block">
                   <i class="fa fa-calendar"></i> View Scheduling Dashboard
                 </a>
-                <a href="course-run.php" class="btn btn-info btn-block">
+                <a href="enroll-history.php" class="btn btn-info btn-block">
                   <i class="fa fa-list"></i> View All Course Runs
                 </a>
               </div>

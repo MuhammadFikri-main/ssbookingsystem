@@ -11,7 +11,7 @@ if (strlen($_SESSION['alogin']) == 0) {
     $courseRunID = isset($_GET['courseRunID']) ? (int)$_GET['courseRunID'] : 0;
 
     if ($courseID == 0) {
-        header('location:manage-students.php');
+        header('location:view-course-run.php');
         exit();
     }
 
@@ -190,7 +190,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                     n.username as nominator_name,
                                                     n.role as nominator_role,
                                                     d.username as delegate_name,
-                                                    d.role as delegate_role
+                                                    d.role as delegate_role,
+                                                    b.creationDate
                                                 FROM courserun cr
                                                 LEFT JOIN booking b ON cr.courseRunID = b.courseRunID 
                                                 LEFT JOIN users n ON b.nominatorID = n.id

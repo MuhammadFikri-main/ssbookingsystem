@@ -1,10 +1,10 @@
 <footer>
-        <div class="container">
-            <div class="row">
-                <div class="col-md-12">
-                     Online Course Registration 
-                </div>
-
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                Super System (SS) Berhad
             </div>
+
         </div>
-    </footer>
+    </div>
+</footer>

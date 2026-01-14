@@ -65,11 +65,28 @@ if (strlen($_SESSION['alogin']) == 0) {
                     ");
 
                         if ($nominator = mysqli_fetch_array($nominatorQuery)) {
-                            // Create booking
+
+                            // Get course price as transfer fee
+                            $priceQuery = mysqli_query($con, "
+                                SELECT price FROM courseprice 
+                                WHERE courseID = {$course['courseID']} 
+                                AND isDeleted = 0 
+                                AND effectiveDate <= CURDATE()
+                                ORDER BY effectiveDate DESC LIMIT 1
+                            ");
+                            $priceData = mysqli_fetch_array($priceQuery);
+                            $transferFee = $priceData ? $priceData['price'] : 0;
+
+                            // Create booking with transfer fee
                             mysqli_query($con, "
-                            INSERT INTO booking (courseRunID, nominatorID, delegateID, status) 
-                            VALUES ('$courseRunID', '{$nominator['nominatorID']}', '$delegateID', 'Confirmed')
-                        ");
+                                INSERT INTO booking (courseRunID, nominatorID, delegateID, status, transferFee) 
+                                VALUES ('$courseRunID', '{$nominator['nominatorID']}', '$delegateID', 'Confirmed', '$transferFee')
+                            ");
+                            // Create booking
+                            // mysqli_query($con, "
+                            // INSERT INTO booking (courseRunID, nominatorID, delegateID, status) 
+                            // VALUES ('$courseRunID', '{$nominator['nominatorID']}', '$delegateID', 'Confirmed')
+                            // ");
 
                             // Remove from waiting list
                             mysqli_query($con, "
@@ -270,7 +287,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                     $maxStudents = $course['maxStudents'];
 
                                     // Determine if course is ready to schedule
-                                    $isReady = ($totalNominations >= 0 && $totalNominations <= $maxStudents);
+                                    $isReady = ($totalNominations >= 5 && $totalNominations <= $maxStudents);
                                     $hasNominations = ($totalNominations > 0);
 
                                     // Card class based on status
@@ -313,7 +330,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                                 </button>
                                                             <?php } elseif ($hasNominations) { ?>
                                                                 <span class="label label-warning">
-                                                                    Need <?php echo max(0, $maxStudents - $totalNominations); ?> more nominations
+                                                                    <?php echo max(0, $maxStudents - $totalNominations); ?> more slot left
                                                                 </span>
                                                             <?php } else { ?>
                                                                 <span class="label label-danger">No nominations yet</span>

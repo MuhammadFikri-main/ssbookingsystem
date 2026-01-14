@@ -166,6 +166,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                             $sql = mysqli_query($con, "
                                             SELECT 
                                                 cr.courseRunID,
+                                                cr.courseID,
                                                 cr.startDate,
                                                 cr.endDate,
                                                 cr.location,
@@ -176,10 +177,10 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 c.maxStudents,
                                                 c.staffLevel,
                                                 DATEDIFF(cr.endDate, cr.startDate) + 1 as run_duration,
-                                                COUNT(w.waitingListID) as enrolled_count
+                                                COUNT(b.bookingID) as enrolled_count
                                             FROM courserun cr
                                             LEFT JOIN courses c ON cr.courseID = c.courseID
-                                            LEFT JOIN waitinglist w ON c.courseID = w.courseID
+                                            LEFT JOIN booking b ON cr.courseRunID = b.courseRunID
                                             GROUP BY cr.courseRunID
                                             ORDER BY cr.startDate DESC, cr.status
                                         ");
@@ -271,7 +272,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                             <a href="edit-course-run.php?id=<?php echo $row['courseRunID']; ?>" class="btn btn-primary btn-xs" title="Edit">
                                                                 <i class="fa fa-edit"></i>
                                                             </a>
-                                                            <a href="view-course-run-attendees.php?id=<?php echo $row['courseRunID']; ?>" class="btn btn-info btn-xs" title="View Attendees">
+                                                            <a href="view-course-run.php?courseID=<?php echo $row['courseID']; ?>&courseRunID=<?php echo $row['courseRunID']; ?>" class="btn btn-info btn-xs" title="View Attendees">
                                                                 <i class="fa fa-users"></i>
                                                             </a>
                                                             <a href="course-run.php?id=<?php echo $row['courseRunID']; ?>&del=delete"
