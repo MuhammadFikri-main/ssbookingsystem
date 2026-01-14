@@ -8,6 +8,7 @@ if (strlen($_SESSION['alogin']) == 0) {
 
     // Get course ID from URL
     $courseID = isset($_GET['courseID']) ? (int)$_GET['courseID'] : 0;
+    $courseRunID = isset($_GET['courseRunID']) ? (int)$_GET['courseRunID'] : 0;
 
     if ($courseID == 0) {
         header('location:manage-students.php');
@@ -112,8 +113,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                             $statsQuery = mysqli_query($con, "
                                             SELECT 
                                                 COUNT(*) as total
-                                            FROM waitinglist 
-                                            WHERE courseID = $courseID
+                                            FROM booking 
+                                            WHERE courseRunID = $courseRunID
                                         ");
                                             $stats = mysqli_fetch_array($statsQuery);
                                             $totalCount = $stats['total'];
@@ -153,12 +154,12 @@ if (strlen($_SESSION['alogin']) == 0) {
                     <div class="col-md-12">
                         <div class="panel panel-default">
                             <div class="panel-heading">
-                                <i class="fa fa-users"></i> Nominations for this Course
-                                <div class="pull-right">
+                                <i class="fa fa-users"></i> Delegates for this Course
+                                <!-- <div class="pull-right">
                                     <a href="student-registration.php" class="btn btn-primary btn-xs">
                                         <i class="fa fa-plus"></i> Add New Nomination
                                     </a>
-                                </div>
+                                </div> -->
                             </div>
                             <div class="panel-body">
                                 <?php if ($totalCount == 0) { ?>
@@ -184,17 +185,18 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 // Fetch nominations for this specific course
                                                 $sql = mysqli_query($con, "
                                                 SELECT 
-                                                    w.waitingListID,
-                                                    w.creationDate,
+                                                    cr.courseRunID,
+                                                    cr.courseID,
                                                     n.username as nominator_name,
                                                     n.role as nominator_role,
                                                     d.username as delegate_name,
                                                     d.role as delegate_role
-                                                FROM waitinglist w
-                                                LEFT JOIN users n ON w.nominatorID = n.id
-                                                LEFT JOIN users d ON w.delegateID = d.id
-                                                WHERE w.courseID = $courseID
-                                                ORDER BY w.creationDate DESC
+                                                FROM courserun cr
+                                                LEFT JOIN booking b ON cr.courseRunID = b.courseRunID 
+                                                LEFT JOIN users n ON b.nominatorID = n.id
+                                                LEFT JOIN users d ON b.delegateID = d.id
+                                                WHERE cr.courseID = $courseID
+                                                ORDER BY b.creationDate DESC
                                             ");
 
                                                 $cnt = 1;

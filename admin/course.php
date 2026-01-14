@@ -134,8 +134,6 @@ if (strlen($_SESSION['alogin']) == 0) {
                                         $cnt = 1;
                                         while ($row = mysqli_fetch_array($sql)) {
                                         ?>
-
-
                                             <tr>
                                                 <td><?php echo $cnt; ?></td>
                                                 <td><?php echo htmlentities($row['title']); ?></td>
