@@ -71,7 +71,23 @@ if (isset($_POST['mark_paid'])) {
                             </thead>
                             <tbody>
                                 <?php
-                                $invoices = mysqli_query($con, "
+                                $currentUserId = $_SESSION['id'];
+                                $userRole = $_SESSION['role']; // Assuming role is stored in session
+
+                                // Build query based on role
+                                if ($userRole == 'manager') {
+                                    $invoices = mysqli_query($con, "
+                                    SELECT b.*, u.username as nominator_name,
+                                           COUNT(DISTINCT p.bookingID) as booking_count
+                                    FROM billing b
+                                    LEFT JOIN users u ON b.nominatorID = u.id
+                                    LEFT JOIN payment p ON b.billingID = p.billingID
+                                    WHERE b.nominatorID = $currentUserId
+                                    GROUP BY b.billingID
+                                    ORDER BY b.billingDate DESC
+                                ");
+                                } else {
+                                    $invoices = mysqli_query($con, "
                                     SELECT b.*, u.username as nominator_name,
                                            COUNT(DISTINCT p.bookingID) as booking_count
                                     FROM billing b
@@ -80,6 +96,7 @@ if (isset($_POST['mark_paid'])) {
                                     GROUP BY b.billingID
                                     ORDER BY b.billingDate DESC
                                 ");
+                                }
 
                                 if (mysqli_num_rows($invoices) > 0) {
                                     while ($invoice = mysqli_fetch_array($invoices)) {

@@ -10,6 +10,7 @@ if (isset($_POST['submit'])) {
     if ($num > 0) {
         $_SESSION['alogin'] = $_POST['username'];
         $_SESSION['id'] = $num['id'];
+        $_SESSION['role'] = $num['role'];
         header("location:course.php");
         exit();
     } else {
@@ -29,7 +30,7 @@ if (isset($_POST['submit'])) {
     <meta name="description" content="" />
     <meta name="author" content="" />
 
-    <title>Admin Login</title>
+    <title>Login</title>
     <link href="../assets/css/bootstrap.css" rel="stylesheet" />
     <link href="../assets/css/font-awesome.css" rel="stylesheet" />
     <link href="../assets/css/style.css" rel="stylesheet" />
@@ -44,9 +45,7 @@ if (isset($_POST['submit'])) {
                 <div class="col-md-12">
                     <div class="navbar-collapse collapse ">
                         <ul id="menu-top" class="nav navbar-nav navbar-right">
-                            <li><a href="../index.php">Home </a></li>
-                            <li><a href="index.php">Admin Login </a></li>
-                            <li><a href="../index.php">Manager Login</a></li>
+                            <li><a href="index.php"> Login </a></li>
 
 
                         </ul>
@@ -60,7 +59,7 @@ if (isset($_POST['submit'])) {
         <div class="container">
             <div class="row">
                 <div class="col-md-12">
-                    <h4 class="page-head-line">Please Login To Enter in to Admin Panel </h4>
+                    <h4 class="page-head-line">Please Login To Enter </h4>
 
                 </div>
 

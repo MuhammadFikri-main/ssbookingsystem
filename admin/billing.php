@@ -12,7 +12,7 @@ if (strlen($_SESSION['alogin']) == 0) {
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-    <title>Billing Dashboard</title>
+    <title>Billing Management</title>
     <link href="../assets/css/bootstrap.css" rel="stylesheet" />
     <link href="../assets/css/font-awesome.css" rel="stylesheet" />
     <link href="../assets/css/style.css" rel="stylesheet" />
@@ -76,7 +76,7 @@ if (strlen($_SESSION['alogin']) == 0) {
         <div class="container">
             <div class="row">
                 <div class="col-md-12">
-                    <h1 class="page-head-line">Billing Management (BI)</h1>
+                    <h1 class="page-head-line">Billing (BI)</h1>
                     <p class="text-muted">Manage course payments, generate invoices, and maintain price book</p>
                 </div>
             </div>
@@ -100,7 +100,15 @@ if (strlen($_SESSION['alogin']) == 0) {
                                 </div>
                                 <div class="col-xs-9 text-right">
                                     <?php
-                                    $total = mysqli_fetch_array(mysqli_query($con, "SELECT COUNT(*) as total FROM billing WHERE MONTH(billingDate) = MONTH(CURDATE())"));
+                                    // First, get the current user's role and ID
+                                    $currentUserId = $_SESSION['id'];
+                                    $userRole = $_SESSION['role']; // Assuming role is stored in session
+
+                                    if ($userRole == "manager") {
+                                        $total = mysqli_fetch_array(mysqli_query($con, "SELECT COUNT(*) as total FROM billing WHERE MONTH(billingDate) = MONTH(CURDATE()) AND nominatorID = $currentUserId"));
+                                    } else {
+                                        $total = mysqli_fetch_array(mysqli_query($con, "SELECT COUNT(*) as total FROM billing WHERE MONTH(billingDate) = MONTH(CURDATE())"));
+                                    }
                                     ?>
                                     <div class="huge"><?php echo $total['total']; ?></div>
                                     <div>This Month's Invoices</div>
@@ -119,7 +127,11 @@ if (strlen($_SESSION['alogin']) == 0) {
                                 </div>
                                 <div class="col-xs-9 text-right">
                                     <?php
-                                    $paid = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Paid'"));
+                                    if ($userRole == "manager") {
+                                        $paid = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Paid' AND nominatorID = $currentUserId"));
+                                    } else {
+                                        $paid = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Paid'"));
+                                    }
                                     ?>
                                     <div class="huge">RM <?php echo number_format($paid['total'] ?: 0, 2); ?></div>
                                     <div>Total Paid</div>
@@ -138,7 +150,11 @@ if (strlen($_SESSION['alogin']) == 0) {
                                 </div>
                                 <div class="col-xs-9 text-right">
                                     <?php
-                                    $pending = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Pending'"));
+                                    if ($userRole == "manager") {
+                                        $pending = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Pending' AND nominatorID = $currentUserId"));
+                                    } else {
+                                        $pending = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Pending'"));
+                                    }
                                     ?>
                                     <div class="huge">RM <?php echo number_format($pending['total'] ?: 0, 2); ?></div>
                                     <div>Pending Payment</div>
@@ -157,7 +173,11 @@ if (strlen($_SESSION['alogin']) == 0) {
                                 </div>
                                 <div class="col-xs-9 text-right">
                                     <?php
-                                    $overdue = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Pending' AND dueDate < CURDATE()"));
+                                    if ($userRole == "manager") {
+                                        $overdue = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Pending' AND dueDate < CURDATE() AND nominatorID = $currentUserId"));
+                                    } else {
+                                        $overdue = mysqli_fetch_array(mysqli_query($con, "SELECT SUM(totalAmount) as total FROM billing WHERE paymentStatus = 'Pending' AND dueDate < CURDATE()"));
+                                    }
                                     ?>
                                     <div class="huge">RM <?php echo number_format($overdue['total'] ?: 0, 2); ?></div>
                                     <div>Overdue</div>
@@ -170,15 +190,27 @@ if (strlen($_SESSION['alogin']) == 0) {
 
             <!-- Quick Links -->
             <div class="row equal-height">
-                <div class="col-md-4 equal-height-col">
-                    <div class="dashboard-card" style="border-top: 4px solid #5bc0de;">
-                        <h3>Generate Monthly Bills</h3>
-                        <p>Create invoices for all nominators based on bookings</p>
-                        <a href="generate_monthly_bills.php" class="btn btn-info btn-block">
-                            <i class="fa fa-calendar-check"></i> Generate Bills
-                        </a>
+                <?php if ($userRole == "admin") { ?>
+                    <div class="col-md-4 equal-height-col">
+                        <div class="dashboard-card" style="border-top: 4px solid #5bc0de;">
+                            <h3>Generate Monthly Bills</h3>
+                            <p>Create invoices for all nominators based on bookings</p>
+                            <a href="generate_monthly_bills.php" class="btn btn-info btn-block">
+                                <i class="fa fa-calendar-check"></i> Generate Bills
+                            </a>
+                        </div>
                     </div>
-                </div>
+
+                    <div class="col-md-4 equal-height-col">
+                        <div class="dashboard-card" style="border-top: 4px solid #f0ad4e;">
+                            <h3>Price Book</h3>
+                            <p>Manage course prices and rates</p>
+                            <a href="add_course_price.php" class="btn btn-warning btn-block">
+                                <i class="fa fa-tags"></i> Manage Prices
+                            </a>
+                        </div>
+                    </div>
+                <?php } ?>
 
                 <div class="col-md-4 equal-height-col">
                     <div class="dashboard-card" style="border-top: 4px solid #5cb85c;">
@@ -186,16 +218,6 @@ if (strlen($_SESSION['alogin']) == 0) {
                         <p>View all invoices and mark payments</p>
                         <a href="view_invoices.php" class="btn btn-success btn-block">
                             <i class="fa fa-list"></i> View Invoices
-                        </a>
-                    </div>
-                </div>
-
-                <div class="col-md-4 equal-height-col">
-                    <div class="dashboard-card" style="border-top: 4px solid #f0ad4e;">
-                        <h3>Price Book</h3>
-                        <p>Manage course prices and rates</p>
-                        <a href="add_course_price.php" class="btn btn-warning btn-block">
-                            <i class="fa fa-tags"></i> Manage Prices
                         </a>
                     </div>
                 </div>

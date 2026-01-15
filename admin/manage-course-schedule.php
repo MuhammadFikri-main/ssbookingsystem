@@ -1,11 +1,11 @@
 <?php
 session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 include('includes/config.php');
-error_reporting(0);
 if (strlen($_SESSION['alogin']) == 0) {
     header('location:index.php');
 } else {
-
     // WEEKLY SCHEDULING REVIEW FUNCTION
     function performWeeklySchedulingReview($con)
     {
@@ -82,15 +82,11 @@ if (strlen($_SESSION['alogin']) == 0) {
                                 INSERT INTO booking (courseRunID, nominatorID, delegateID, status, transferFee) 
                                 VALUES ('$courseRunID', '{$nominator['nominatorID']}', '$delegateID', 'Confirmed', '$transferFee')
                             ");
-                            // Create booking
-                            // mysqli_query($con, "
-                            // INSERT INTO booking (courseRunID, nominatorID, delegateID, status) 
-                            // VALUES ('$courseRunID', '{$nominator['nominatorID']}', '$delegateID', 'Confirmed')
-                            // ");
 
                             // Remove from waiting list
                             mysqli_query($con, "
-                            DELETE FROM waitinglist 
+                            UPDATE waitinglist
+                            SET isBooked = 1 
                             WHERE courseID = {$course['courseID']} 
                             AND delegateID = $delegateID
                         ");
@@ -114,33 +110,118 @@ if (strlen($_SESSION['alogin']) == 0) {
     if (isset($_GET['weekly_review'])) {
         $scheduled = performWeeklySchedulingReview($con);
         $_SESSION['msg'] = "Weekly review completed. Scheduled $scheduled new course runs.";
-        header('location:manage-course-schedule.php');
+        header("Location: " . $_SERVER['PHP_SELF']);
         exit();
     }
 
-    // Code for Scheduling a Course Run
+    // Code for Scheduling a Course Run (MANUAL - Single Course)
     if (isset($_POST['schedule'])) {
         $courseID = (int)$_POST['courseID'];
         $startDate = $_POST['startDate'];
         $endDate = $_POST['endDate'];
         $location = mysqli_real_escape_string($con, $_POST['location']);
 
+        // Get course details and waiting delegates
+        $courseQuery = mysqli_query($con, "
+        SELECT 
+            c.title,
+            c.maxStudents,
+            c.durationDays,
+            COUNT(w.waitingListID) as waiting_count,
+            GROUP_CONCAT(DISTINCT w.delegateID) as delegate_ids
+        FROM courses c
+        LEFT JOIN waitinglist w ON c.courseID = w.courseID
+        WHERE c.courseID = '$courseID'
+        GROUP BY c.courseID
+    ");
+
+        $courseData = mysqli_fetch_array($courseQuery);
+        $waitingCount = $courseData['waiting_count'];
+        $maxStudents = $courseData['maxStudents'];
+
+        if ($waitingCount < 1) {
+            $_SESSION['msg'] = "Error: No waiting delegates found for this course.";
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
+        }
+
         // Insert into courserun table
-        $scheduleQuery = mysqli_query($con, "INSERT INTO courserun (courseID, startDate, endDate, location, status) 
-                                           VALUES ('$courseID', '$startDate', '$endDate', '$location', 'Scheduled')");
+        $scheduleQuery = mysqli_query($con, "
+        INSERT INTO courserun (courseID, startDate, endDate, location, status) 
+        VALUES ('$courseID', '$startDate', '$endDate', '$location', 'Scheduled')
+    ");
 
         if ($scheduleQuery) {
             $courseRunID = mysqli_insert_id($con);
+            $movedCount = 0;
 
-            // Update all approved nominations for this course to a new status (e.g., 'Enrolled')
-            mysqli_query($con, "UPDATE waitingList SET status = 'Enrolled' WHERE courseID = $courseID AND status = 'Approved'");
+            // Get delegate IDs
+            $delegateIDs = explode(',', $courseData['delegate_ids']);
+            $maxToMove = min($maxStudents, count($delegateIDs), $waitingCount);
 
-            $_SESSION['msg'] = "Course Run Scheduled Successfully! Course Run ID: " . $courseRunID;
-            header('location:manage-waitinglist.php');
+            // Move delegates from Waiting List to Booking (with transfer fees)
+            for ($i = 0; $i < $maxToMove; $i++) {
+                $delegateID = $delegateIDs[$i];
+
+                // Get nominator ID for this delegate
+                $nominatorQuery = mysqli_query($con, "
+                SELECT nominatorID FROM waitinglist 
+                WHERE courseID = '$courseID' 
+                AND delegateID = '$delegateID' 
+                LIMIT 1
+            ");
+
+                if ($nominatorData = mysqli_fetch_array($nominatorQuery)) {
+                    $nominatorID = $nominatorData['nominatorID'];
+
+                    // Get course price as transfer fee
+                    $priceQuery = mysqli_query($con, "
+                    SELECT price FROM courseprice 
+                    WHERE courseID = '$courseID' 
+                    AND isDeleted = 0 
+                    AND effectiveDate <= CURDATE()
+                    ORDER BY effectiveDate DESC LIMIT 1
+                ");
+
+                    $priceData = mysqli_fetch_array($priceQuery);
+                    $transferFee = $priceData ? $priceData['price'] : 0;
+
+                    // Create booking with transfer fee
+                    mysqli_query($con, "
+                    INSERT INTO booking (courseRunID, nominatorID, delegateID, status, transferFee) 
+                    VALUES ('$courseRunID', '$nominatorID', '$delegateID', 'Confirmed', '$transferFee')
+                ");
+
+                    // Remove from waiting list
+                    mysqli_query($con, "
+                    UPDATE waitinglist
+                    SET isBooked = 1 
+                    WHERE courseID = '$courseID' 
+                    AND delegateID = '$delegateID'
+                ");
+
+                    $movedCount++;
+                }
+            }
+
+            // Update any remaining waiting list entries to different status
+            // if ($waitingCount > $maxToMove) {
+            //     // You might want to keep them in waiting list or change status
+            //     mysqli_query($con, "
+            //     UPDATE waitinglist 
+            //     SET status = 'Waiting_Next_Run' 
+            //     WHERE courseID = '$courseID'
+            // ");
+            // }
+
+            $_SESSION['msg'] = "Course Run Scheduled Successfully!<br>
+                           Course Run ID: $courseRunID<br>
+                           $movedCount delegate(s) moved from waiting list to bookings.";
+            header("Location: " . $_SERVER['PHP_SELF']);
             exit();
         } else {
             $_SESSION['msg'] = "Error scheduling course: " . mysqli_error($con);
-            header('location:manage-waitinglist.php');
+            header("Location: " . $_SERVER['PHP_SELF']);
             exit();
         }
     }
@@ -150,7 +231,7 @@ if (strlen($_SESSION['alogin']) == 0) {
         $id = (int)$_GET['id'];
         mysqli_query($con, "UPDATE waitingList SET status = 'Approved' WHERE waitingListID = $id");
         $_SESSION['msg'] = "Nomination Approved Successfully !!";
-        header('location:manage-waitinglist.php');
+        header("Location: " . $_SERVER['PHP_SELF']);
         exit();
     }
 
@@ -158,7 +239,7 @@ if (strlen($_SESSION['alogin']) == 0) {
         $id = (int)$_GET['id'];
         mysqli_query($con, "UPDATE waitingList SET status = 'Rejected' WHERE waitingListID = $id");
         $_SESSION['msg'] = "Nomination Rejected !!";
-        header('location:manage-waitinglist.php');
+        header("Location: " . $_SERVER['PHP_SELF']);
         exit();
     }
 ?>
@@ -171,7 +252,7 @@ if (strlen($_SESSION['alogin']) == 0) {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <meta name="description" content="" />
         <meta name="author" content="" />
-        <title>Admin | Waiting List & Course Scheduling</title>
+        <title>Schedule Management</title>
         <link href="../assets/css/bootstrap.css" rel="stylesheet" />
         <link href="../assets/css/font-awesome.css" rel="stylesheet" />
         <link href="../assets/css/style.css" rel="stylesheet" />
@@ -219,7 +300,7 @@ if (strlen($_SESSION['alogin']) == 0) {
             <div class="container">
                 <div class="row">
                     <div class="col-md-12">
-                        <h1 class="page-head-line">Course Scheduling Dashboard</h1>
+                        <h1 class="page-head-line">Course Scheduling (CS)</h1>
                         <p class="text-muted">Review nominations by course and schedule training sessions</p>
                     </div>
                 </div>
@@ -253,11 +334,11 @@ if (strlen($_SESSION['alogin']) == 0) {
 
                                 <i class="fa fa-calendar-check-o"></i> Courses Ready for Scheduling
                                 <span class="pull-right">
-                                    <a href="?weekly_review=1" class="btn btn-warning btn-xs"
+                                    <!-- <a href="?weekly_review=1" class="btn btn-warning btn-xs"
                                         onclick="return confirm('Run weekly scheduling review? This will auto-schedule courses with 5+ waiting delegates.')">
                                         <i class="fa fa-refresh"></i> Run Weekly Review
-                                    </a>
-                                    <small>Minimum: 5 delegates | Maximum: Based on course limit</small>
+                                    </a> -->
+                                    <small>Minimum: 3 delegates | Maximum: Based on course limit</small>
                                 </span>
                             </div>
                             <div class="panel-body">
@@ -276,6 +357,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                 LEFT JOIN waitinglist w ON c.courseID = w.courseID
                                 LEFT JOIN users d ON w.delegateID = d.id
                                 WHERE c.isDeleted = 0
+                                AND w.isBooked = 0
+                                AND w.isDeleted = 0
                                 GROUP BY c.courseID
                                 HAVING COUNT(w.waitingListID) > 0
                                 ORDER BY total_nominations DESC
@@ -287,7 +370,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                     $maxStudents = $course['maxStudents'];
 
                                     // Determine if course is ready to schedule
-                                    $isReady = ($totalNominations >= 5 && $totalNominations <= $maxStudents);
+                                    $isReady = ($totalNominations >= 3);
                                     $hasNominations = ($totalNominations > 0);
 
                                     // Card class based on status
@@ -347,7 +430,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 <!-- Schedule Form (Hidden by default) -->
                                                 <div class="schedule-form" id="schedule-form-<?php echo $course['courseID']; ?>">
                                                     <h5>Schedule Course Run</h5>
-                                                    <form method="post" class="form-horizontal">
+                                                    <form method="post" class="form-horizontal" name="schedule">
                                                         <input type="hidden" name="courseID" value="<?php echo $course['courseID']; ?>">
 
                                                         <div class="form-group">
@@ -413,9 +496,9 @@ if (strlen($_SESSION['alogin']) == 0) {
                             <div class="panel-heading">
                                 <i class="fa fa-list"></i> All Nominations
                                 <div class="pull-right">
-                                    <a href="student-registration.php" class="btn btn-primary btn-xs">
+                                    <!-- <a href="student-registration.php" class="btn btn-primary btn-xs">
                                         <i class="fa fa-plus"></i> Add New Nomination
-                                    </a>
+                                    </a> -->
                                 </div>
                             </div>
                             <div class="panel-body">
@@ -428,8 +511,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 <th>Nominator</th>
                                                 <th>Delegate</th>
                                                 <th>Date Nominated</th>
-                                                <th>Status</th>
-                                                <th>Actions</th>
+                                                <!-- <th>Status</th>
+                                                <th>Actions</th> -->
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -446,6 +529,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                             LEFT JOIN users n ON w.nominatorID = n.id
                                             LEFT JOIN users d ON w.delegateID = d.id
                                             WHERE c.isDeleted = 0
+                                            AND w.isBooked = 0
+                                            AND w.isDeleted = 0
                                             ORDER BY w.creationDate DESC
                                         ");
 
@@ -473,7 +558,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                     <td><?php echo htmlentities($row['nominator_name']); ?></td>
                                                     <td><?php echo htmlentities($row['delegate_name']); ?></td>
                                                     <td><?php echo date('d-m-Y', strtotime($row['creationDate'])); ?></td>
-                                                    <td>
+                                                    <!-- <td>
                                                         <span class="label label-<?php echo $statusClass; ?>">
                                                             <?php echo htmlentities($row['status']); ?>
                                                         </span>
@@ -497,7 +582,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                                 <i class="fa fa-edit"></i>
                                                             </a>
                                                         </div>
-                                                    </td>
+                                                    </td> -->
                                                 </tr>
                                             <?php
                                                 $cnt++;
@@ -531,13 +616,37 @@ if (strlen($_SESSION['alogin']) == 0) {
                 $('.datepicker').datepicker({
                     format: 'yyyy-mm-dd',
                     autoclose: true,
-                    todayHighlight: true
+                    todayHighlight: true,
+                    startDate: new Date() // Prevent past dates
                 });
 
                 // Show schedule form when "Schedule Now" is clicked
                 $('.schedule-btn').click(function() {
                     var courseID = $(this).data('courseid');
-                    $('#schedule-form-' + courseID).slideDown();
+                    var form = $('#schedule-form-' + courseID);
+
+                    // Get course duration
+                    var courseCard = $(this).closest('.course-card');
+                    var durationText = courseCard.find('.label-default:contains("days")').text();
+                    var duration = parseInt(durationText.match(/\d+/)[0]) || 1;
+
+                    // Set default start date (4 weeks from now like weekly review)
+                    var defaultStartDate = new Date();
+                    defaultStartDate.setDate(defaultStartDate.getDate() + 28); // 4 weeks
+                    var startDateStr = defaultStartDate.toISOString().split('T')[0];
+
+                    // Set default end date (start date + duration)
+                    var defaultEndDate = new Date(defaultStartDate);
+                    defaultEndDate.setDate(defaultEndDate.getDate() + duration);
+                    var endDateStr = defaultEndDate.toISOString().split('T')[0];
+
+                    // Set default location
+                    form.find('input[name="startDate"]').val(startDateStr);
+                    form.find('input[name="endDate"]').val(endDateStr);
+                    form.find('select[name="location"]').val('Training Room A');
+
+                    // Show the form
+                    form.slideDown();
                     $(this).hide();
                 });
 
@@ -547,20 +656,39 @@ if (strlen($_SESSION['alogin']) == 0) {
                     $(this).closest('.course-card').find('.schedule-btn').show();
                 });
 
-                // Calculate end date based on course duration
+                // Calculate end date based on course duration when start date changes
                 $('input[name="startDate"]').change(function() {
                     var startDate = $(this).val();
                     var courseCard = $(this).closest('.course-card');
-                    var duration = parseInt(courseCard.find('.label-default:contains("days")').text().match(/\d+/)[0]);
+                    var durationText = courseCard.find('.label-default:contains("days")').text();
+                    var duration = parseInt(durationText.match(/\d+/)[0]) || 1;
 
-                    if (startDate && duration) {
+                    if (startDate) {
                         var start = new Date(startDate);
                         start.setDate(start.getDate() + duration);
                         var endDate = start.toISOString().split('T')[0];
-
                         $(this).closest('.schedule-form').find('input[name="endDate"]').val(endDate);
                     }
                 });
+
+                // Add confirmation for scheduling
+                // $('form[name="schedule"]').submit(function(e) {
+                //     var courseTitle = $(this).closest('.course-card').find('h4').text().trim();
+                //     var startDate = $(this).find('input[name="startDate"]').val();
+                //     var location = $(this).find('select[name="location"]').val();
+
+                //     return confirm(
+                //         "Schedule Course Run?\n\n" +
+                //         "Course: " + courseTitle + "\n" +
+                //         "Start: " + startDate + "\n" +
+                //         "Location: " + location + "\n\n" +
+                //         "This will:\n" +
+                //         "1. Create a new Course Run\n" +
+                //         "2. Move delegates from waiting list to bookings\n" +
+                //         "3. Apply transfer fees\n" +
+                //         "4. Update waiting list status"
+                //     );
+                // });
             });
         </script>
     </body>

@@ -4,18 +4,23 @@
             <div class="col-md-12">
                 <div class="navbar-collapse collapse ">
                     <ul id="menu-top" class="nav navbar-nav navbar-right">
-
-                        <!-- <li><a href="session.php">Session</a></li>
-                            <li><a href="semester.php">Semester </a></li>
-                            <li><a   href="department.php">Department</a></li> -->
+                        <li style="color: white;">
+                            <a href="#"><?php echo htmlentities($_SESSION['alogin']); ?>
+                                <!-- <small>(<?php echo htmlentities($_SESSION['role']); ?>)</small> --></a>
+                        </li>
                         <li><a href="course.php">Course</a></li>
-                        <li><a href="student-registration.php">Nomination</a></li>
-                        <li><a href="manage-course-schedule.php">Waiting List</a></li>
-                        <li><a href="enroll-history.php">Course Run</a></li>
+                        <?php if ($_SESSION['role'] == "manager") {
+                        ?>
+                            <li><a href="student-registration.php">Nomination</a></li>
+                        <?php }
+                        ?>
+                        <?php if ($_SESSION['role'] == "admin") {
+                        ?>
+                            <li><a href="manage-course-schedule.php">Schedule</a></li>
+                            <li><a href="enroll-history.php">Booking</a></li>
+                        <?php } ?>
                         <li><a href="billing.php">Billing</a></li>
-                        <!-- <li><a href="news.php">News </a></li> -->
                         <li><a href="logout.php">Logout</a></li>
-
                     </ul>
                 </div>
             </div>

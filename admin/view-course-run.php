@@ -176,8 +176,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                     <th>Nominator</th>
                                                     <th>Delegate</th>
                                                     <th>Date Nominated</th>
-                                                    <th>Status</th>
-                                                    <th>Actions</th>
+                                                    <!-- <th>Status</th> -->
+                                                    <!-- <th>Actions</th> -->
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -197,6 +197,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 LEFT JOIN users n ON b.nominatorID = n.id
                                                 LEFT JOIN users d ON b.delegateID = d.id
                                                 WHERE cr.courseID = $courseID
+                                                AND b.isCanceled = 0
                                                 ORDER BY b.creationDate DESC
                                             ");
 
@@ -229,12 +230,12 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                             <small class="text-muted"><?php echo htmlentities($row['delegate_role']); ?></small>
                                                         </td>
                                                         <td><?php echo date('d-m-Y', strtotime($row['creationDate'])); ?></td>
-                                                        <td>
+                                                        <!-- <td>
                                                             <span class="label label-<?php echo $statusClass; ?>">
                                                                 <?php echo htmlentities($row['status']); ?>
                                                             </span>
-                                                        </td>
-                                                        <td>
+                                                        </td> -->
+                                                        <!-- <td>
                                                             <div class="btn-group">
                                                                 <?php if ($row['status'] == 'Pending') { ?>
                                                                     <?php if ($approvedCount < $course['maxStudents']) { ?>
@@ -265,7 +266,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                                     <i class="fa fa-trash"></i>
                                                                 </a>
                                                             </div>
-                                                        </td>
+                                                        </td> -->
                                                     </tr>
                                                 <?php
                                                     $cnt++;

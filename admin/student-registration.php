@@ -14,11 +14,11 @@ if (strlen($_SESSION['alogin']) == 0) {
     $check = mysqli_query($con, "
         SELECT EXISTS(
             SELECT 1 FROM waitinglist 
-            WHERE courseID = $courseID AND delegateID = $delegateID
+            WHERE courseID = $courseID AND delegateID = $delegateID AND isDeleted = 0 AND isBooked = 0
             UNION ALL
             SELECT 1 FROM booking b
             JOIN courserun cr ON b.courseRunID = cr.courseRunID
-            WHERE cr.courseID = $courseID AND b.delegateID = $delegateID
+            WHERE cr.courseID = $courseID AND b.delegateID = $delegateID AND b.isCanceled = 0
         ) as already_exists
     ");
 
@@ -39,6 +39,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                 AND cr.status = 'Scheduled'
                 AND cr.startDate >= CURDATE()
                 AND cr.startDate <= DATE_ADD(CURDATE(), INTERVAL 60 DAY)
+                AND b.isCanceled = 0
                 GROUP BY cr.courseRunID
                 HAVING booked_count < c.maxStudents
                 ORDER BY cr.startDate ASC
@@ -52,11 +53,23 @@ if (strlen($_SESSION['alogin']) == 0) {
         $availableSeats = $courseRun['maxStudents'] - $courseRun['booked_count'];
 
         if ($availableSeats > 0) {
+          // Get course price as transfer fee
+          $priceQuery = mysqli_query($con, "
+              SELECT price FROM courseprice 
+              WHERE courseID = {$courseRun['courseID']} 
+              AND effectiveDate <= CURDATE()
+              ORDER BY effectiveDate DESC LIMIT 1
+          ");
+          $priceData = mysqli_fetch_array($priceQuery);
+          $transferFee = $priceData ? $priceData['price'] : 0;
+
+          // Create booking with transfer fee
+
           // Create Booking (CONFIRMED)
           $bookingQuery = mysqli_query($con, "
-                        INSERT INTO booking (courseRunID, nominatorID, delegateID, status) 
-                        VALUES ('$courseRunID', '$nominatorID', '$delegateID', 'Confirmed')
-                    ");
+                                INSERT INTO booking (courseRunID, nominatorID, delegateID, status, transferFee) 
+                                VALUES ('$courseRunID', '$nominatorID', '$delegateID', 'Confirmed', '$transferFee')
+                            ");
 
           if ($bookingQuery) {
             $bookingID = mysqli_insert_id($con);
@@ -115,8 +128,128 @@ if (strlen($_SESSION['alogin']) == 0) {
   // Code for delete nomination
   if (isset($_GET['del'])) {
     $id = (int)$_GET['del'];
-    mysqli_query($con, "DELETE FROM waitinglist WHERE waitingListID = $id");
+    mysqli_query($con, "UPDATE waitinglist SET isDeleted = 1 WHERE waitingListID = $id");
     $_SESSION['msg'] = "Nomination deleted successfully!";
+    header('location:student-registration.php');
+    exit();
+  }
+
+  // Code for cancel booking with waiting list substitution
+  if (isset($_GET['cancel'])) {
+    $bookingID = (int)$_GET['cancel'];
+
+    // 1. Get booking details to find the course run and course
+    $bookingQuery = mysqli_query($con, "
+        SELECT b.*, cr.courseID, cr.courseRunID 
+        FROM booking b
+        JOIN courserun cr ON b.courseRunID = cr.courseRunID
+        WHERE b.bookingID = $bookingID
+        AND b.isCanceled = 0
+    ");
+
+    if (mysqli_num_rows($bookingQuery) == 0) {
+      $_SESSION['msg'] = "Booking not found or already canceled.";
+      header('location:student-registration.php');
+      exit();
+    }
+
+    $bookingData = mysqli_fetch_array($bookingQuery);
+    $courseID = $bookingData['courseID'];
+    $courseRunID = $bookingData['courseRunID'];
+
+    // 2. Check if there are users in waiting list for this course
+    $waitingQuery = mysqli_query($con, "
+        SELECT w.*, u.username
+        FROM waitinglist w
+        JOIN users u ON w.delegateID = u.id
+        WHERE w.courseID = $courseID
+        AND w.isDeleted = 0
+        AND w.isBooked = 0
+        ORDER BY w.creationDate ASC
+        LIMIT 1
+    ");
+
+    if (mysqli_num_rows($waitingQuery) > 0) {
+      // 3. There is at least one user in waiting list - SUBSTITUTE THEM
+      $waitingData = mysqli_fetch_array($waitingQuery);
+      $waitingListID = $waitingData['waitingListID'];
+      $substituteDelegateID = $waitingData['delegateID'];
+      $substituteNominatorID = $waitingData['nominatorID'];
+      $substituteUsername = $waitingData['username'];
+
+      // Get course price for transfer fee
+      $priceQuery = mysqli_query($con, "
+            SELECT price FROM courseprice 
+            WHERE courseID = '$courseID' 
+            AND isDeleted = 0 
+            AND effectiveDate <= CURDATE()
+            ORDER BY effectiveDate DESC LIMIT 1
+        ");
+      $priceData = mysqli_fetch_array($priceQuery);
+      $transferFee = $priceData ? $priceData['price'] : 0;
+
+      // 4. Create new booking for the substitute delegate
+      $newBookingQuery = mysqli_query($con, "
+            INSERT INTO booking (courseRunID, nominatorID, delegateID, status, transferFee) 
+            VALUES ('$courseRunID', '$substituteNominatorID', '$substituteDelegateID', 'Confirmed', '$transferFee')
+        ");
+
+      if ($newBookingQuery) {
+        $newBookingID = mysqli_insert_id($con);
+
+        // 5. Update waiting list entry to mark as booked
+        mysqli_query($con, "
+                UPDATE waitinglist 
+                SET isBooked = 1, 
+                    updationDate = CURDATE()
+                WHERE waitingListID = $waitingListID
+            ");
+
+        // 6. Cancel the original booking
+        mysqli_query($con, "
+                UPDATE booking 
+                SET isCanceled = 1, 
+                    cancellationDate = NOW()
+                WHERE bookingID = $bookingID
+            ");
+
+        // 7. Get course info for notification
+        $courseInfoQuery = mysqli_query($con, "
+                SELECT c.title, cr.startDate, cr.location
+                FROM courses c
+                JOIN courserun cr ON c.courseID = cr.courseID
+                WHERE cr.courseRunID = $courseRunID
+            ");
+        $courseInfo = mysqli_fetch_array($courseInfoQuery);
+
+        $_SESSION['msg'] = "Booking canceled successfully!<br>
+                               User <strong>$substituteUsername</strong> has been moved from waiting list to this booking.<br>
+                               New Booking ID: $newBookingID<br>
+                               Course: " . $courseInfo['title'] . "<br>
+                               Start Date: " . date('d-m-Y', strtotime($courseInfo['startDate']));
+      } else {
+        // If creating new booking fails, just cancel the original
+        mysqli_query($con, "
+                UPDATE booking 
+                SET isCanceled = 1, 
+                    cancellationDate = CURDATE()
+                WHERE bookingID = $bookingID
+            ");
+        $_SESSION['msg'] = "Booking canceled. Error substituting from waiting list: " . mysqli_error($con);
+      }
+    } else {
+      // 8. No users in waiting list - just cancel the booking
+      mysqli_query($con, "
+            UPDATE booking 
+            SET isCanceled = 1, 
+                cancellationDate = CURDATE()
+            WHERE bookingID = $bookingID
+        ");
+
+      $_SESSION['msg'] = "Booking canceled successfully!<br>
+                           No users in waiting list for this course.";
+    }
+
     header('location:student-registration.php');
     exit();
   }
@@ -216,15 +349,31 @@ if (strlen($_SESSION['alogin']) == 0) {
                         <select class="form-control" id="nominatorID" name="nominatorID" required>
                           <option value="">-- Select Nominator --</option>
                           <?php
-                          $nominatorQuery = mysqli_query($con, "
-                                                    SELECT id, username, role 
-                                                    FROM users 
-                                                    WHERE role = 'manager' 
-                                                    ORDER BY username
-                                                ");
+                          // First, get the current user's role and ID
+                          $currentUserId = $_SESSION['id'];
+                          $userRole = $_SESSION['role']; // Assuming role is stored in session
+
+                          // Build query based on role
+                          if ($userRole == 'manager') {
+                            // If user is manager, show only their own record
+                            $nominatorQuery = mysqli_query($con, "
+                                SELECT id, username, role 
+                                FROM users 
+                                WHERE id = '$currentUserId' 
+                                AND role = 'manager'
+                            ");
+                          } else {
+                            // For non-managers (like admin), show all managers
+                            $nominatorQuery = mysqli_query($con, "
+                                SELECT id, username, role 
+                                FROM users 
+                                WHERE role = 'manager' 
+                                ORDER BY username
+                            ");
+                          }
 
                           while ($nominator = mysqli_fetch_array($nominatorQuery)) {
-                            $selected = ($_SESSION['alogin'] == $nominator['username']) ? "selected" : "";
+                            $selected = ($_SESSION['id'] == $nominator['id']) ? "selected" : "";
                             echo "<option value='" . $nominator['id'] . "' $selected>" .
                               htmlentities($nominator['username']) . " (" .
                               htmlentities($nominator['role']) . ")</option>";
@@ -260,11 +409,10 @@ if (strlen($_SESSION['alogin']) == 0) {
 
                   <div class="form-group">
                     <div class="alert alert-warning">
-                      <strong>System Logic:</strong><br>
-                      1. Checks for upcoming course runs (next 60 days)<br>
-                      2. If seats available → Creates Confirmed Booking<br>
+                      <strong>Notes:</strong><br>
+                      2. If seats available → Auto Confirmed Booking<br>
                       3. If no seats/no runs → Adds to Waiting List<br>
-                      4. Auto-schedule when waiting list reaches minimum size
+                      4. Booking happen when waiting list reaches minimum size
                     </div>
                   </div>
 
@@ -289,8 +437,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                 <?php
                 // Get stats
                 $stats = array(
-                  'waiting' => mysqli_fetch_array(mysqli_query($con, "SELECT COUNT(*) as cnt FROM waitinglist"))['cnt'],
-                  'bookings' => mysqli_fetch_array(mysqli_query($con, "SELECT COUNT(*) as cnt FROM booking WHERE status = 'Confirmed'"))['cnt'],
+                  'waiting' => mysqli_fetch_array(mysqli_query($con, "SELECT COUNT(*) as cnt FROM waitinglist WHERE nominatorID = $currentUserId"))['cnt'],
+                  'bookings' => mysqli_fetch_array(mysqli_query($con, "SELECT COUNT(*) as cnt FROM booking WHERE status = 'Confirmed' AND nominatorID = $currentUserId"))['cnt'],
                   'upcoming' => mysqli_fetch_array(mysqli_query($con, "
                                     SELECT COUNT(DISTINCT cr.courseRunID) as cnt 
                                     FROM courserun cr 
@@ -302,13 +450,13 @@ if (strlen($_SESSION['alogin']) == 0) {
                 <p><strong>Waiting List:</strong> <?php echo $stats['waiting']; ?> delegates</p>
                 <p><strong>Confirmed Bookings:</strong> <?php echo $stats['bookings']; ?> delegates</p>
                 <p><strong>Upcoming Runs:</strong> <?php echo $stats['upcoming']; ?> courses</p>
-                <hr>
+                <!-- <hr>
                 <a href="manage-course-schedule.php" class="btn btn-success btn-block">
                   <i class="fa fa-calendar"></i> View Scheduling Dashboard
                 </a>
                 <a href="enroll-history.php" class="btn btn-info btn-block">
                   <i class="fa fa-list"></i> View All Course Runs
-                </a>
+                </a> -->
               </div>
             </div>
           </div>
@@ -359,8 +507,12 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                     JOIN courses c ON w.courseID = c.courseID
                                                     JOIN users n ON w.nominatorID = n.id
                                                     JOIN users d ON w.delegateID = d.id
+                                                    WHERE w.nominatorID = $currentUserId
+                                                    AND w.isDeleted = 0
+                                                    AND w.isBooked = 0
                                                     ORDER BY w.creationDate DESC
                                                 ");
+
 
                           $cnt = 1;
                           while ($row = mysqli_fetch_array($waitingQuery)) {
@@ -409,6 +561,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                             <th>Location</th>
                             <th>Booking Date</th>
                             <th>Status</th>
+                            <th>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -425,6 +578,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                     JOIN courses c ON cr.courseID = c.courseID
                                                     JOIN users d ON b.delegateID = d.id
                                                     WHERE b.status = 'Confirmed'
+                                                    AND b.nominatorID = $currentUserId
+                                                    AND b.isCanceled = 0
                                                     ORDER BY cr.startDate DESC
                                                 ");
 
@@ -443,6 +598,13 @@ if (strlen($_SESSION['alogin']) == 0) {
                                 <span class="label label-<?php echo $statusClass; ?>">
                                   <?php echo htmlentities($row['run_status']); ?>
                                 </span>
+                              </td>
+                              <td>
+                                <a href="?cancel=<?php echo $row['bookingID']; ?>"
+                                  onclick="return confirm('Cancel Booking?')"
+                                  class="btn btn-danger btn-xs" title="Cancel">
+                                  <i class="fa fa-trash"></i>
+                                </a>
                               </td>
                             </tr>
                           <?php

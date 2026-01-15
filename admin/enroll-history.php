@@ -7,9 +7,9 @@ if (strlen($_SESSION['alogin']) == 0) {
     // Code to delete a course run
     if (isset($_GET['del'])) {
         $id = (int)$_GET['id'];
-        mysqli_query($con, "DELETE FROM courserun WHERE courseRunID = $id");
+        mysqli_query($con, "UPDATE courserun SET status = 'Cancelled' WHERE courseRunID = $id");
         echo '<script>alert("Course Run Deleted Successfully !!")</script>';
-        echo '<script>window.location.href="course-run.php"</script>';
+        echo '<script>window.location.href="enroll-history.php"</script>';
     }
 
     // Code to change status
@@ -30,7 +30,7 @@ if (strlen($_SESSION['alogin']) == 0) {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <meta name="description" content="" />
         <meta name="author" content="" />
-        <title>Course Run Management</title>
+        <title>Booking Management</title>
         <link href="../assets/css/bootstrap.css" rel="stylesheet" />
         <link href="../assets/css/font-awesome.css" rel="stylesheet" />
         <link href="../assets/css/style.css" rel="stylesheet" />
@@ -48,7 +48,7 @@ if (strlen($_SESSION['alogin']) == 0) {
             <div class="container">
                 <div class="row">
                     <div class="col-md-12">
-                        <h1 class="page-head-line">Course Run Management</h1>
+                        <h1 class="page-head-line">Booking (BK)</h1>
                     </div>
                 </div>
 
@@ -138,9 +138,9 @@ if (strlen($_SESSION['alogin']) == 0) {
                             <div class="panel-heading">
                                 Course Run Schedule
                                 <div class="pull-right">
-                                    <a href="schedule-course.php" class="btn btn-primary btn-xs">
+                                    <!-- <a href="schedule-course.php" class="btn btn-primary btn-xs">
                                         <i class="fa fa-plus"></i> Schedule New Course Run
-                                    </a>
+                                    </a> -->
                                 </div>
                             </div>
                             <!-- /.panel-heading -->
@@ -181,6 +181,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                             FROM courserun cr
                                             LEFT JOIN courses c ON cr.courseID = c.courseID
                                             LEFT JOIN booking b ON cr.courseRunID = b.courseRunID
+                                            WHERE b.isCanceled = 0
                                             GROUP BY cr.courseRunID
                                             ORDER BY cr.startDate DESC, cr.status
                                         ");
@@ -257,7 +258,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                     <td>
                                                         <div class="btn-group">
                                                             <!-- Status Change Dropdown -->
-                                                            <div class="btn-group">
+                                                            <!-- <div class="btn-group">
                                                                 <button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown">
                                                                     Status <span class="caret"></span>
                                                                 </button>
@@ -267,7 +268,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                                     <li><a href="course-run.php?id=<?php echo $row['courseRunID']; ?>&status=Completed" onclick="return confirm('Change status to Completed?')">Completed</a></li>
                                                                     <li><a href="course-run.php?id=<?php echo $row['courseRunID']; ?>&status=Cancelled" onclick="return confirm('Change status to Cancelled?')">Cancelled</a></li>
                                                                 </ul>
-                                                            </div>
+                                                            </div> -->
 
                                                             <a href="edit-course-run.php?id=<?php echo $row['courseRunID']; ?>" class="btn btn-primary btn-xs" title="Edit">
                                                                 <i class="fa fa-edit"></i>
@@ -275,7 +276,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                             <a href="view-course-run.php?courseID=<?php echo $row['courseID']; ?>&courseRunID=<?php echo $row['courseRunID']; ?>" class="btn btn-info btn-xs" title="View Attendees">
                                                                 <i class="fa fa-users"></i>
                                                             </a>
-                                                            <a href="course-run.php?id=<?php echo $row['courseRunID']; ?>&del=delete"
+                                                            <a href="enroll-history.php?id=<?php echo $row['courseRunID']; ?>&del=delete"
                                                                 onClick="return confirm('Are you sure you want to delete this course run?')"
                                                                 class="btn btn-danger btn-xs" title="Delete">
                                                                 <i class="fa fa-trash"></i>
@@ -291,7 +292,6 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 <tr>
                                                     <td colspan="9" class="text-center">
                                                         No course runs found.
-                                                        <a href="schedule-course.php">Schedule your first course run</a>
                                                     </td>
                                                 </tr>
                                             <?php endif; ?>

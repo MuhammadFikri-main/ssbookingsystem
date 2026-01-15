@@ -13,12 +13,15 @@ if (strlen($_SESSION['alogin']) == 0) {
 if (isset($_POST['generate_bills'])) {
     $month = $_POST['month'];
 
-    // Get all unique nominators who have bookings
+    // Get all unique nominators who have active bookings (not cancelled)
     $nominatorsQuery = mysqli_query($con, "
         SELECT DISTINCT b.nominatorID, u.username
         FROM booking b
         JOIN users u ON b.nominatorID = u.id
-        WHERE b.status = 'Confirmed'
+        JOIN courserun cr ON b.courseRunID = cr.courseRunID
+        WHERE b.status = 'Confirmed' 
+        AND b.isCanceled = 0  -- Only non-cancelled bookings
+        AND cr.status != 'Cancelled'  -- Only non-cancelled course runs
         AND DATE_FORMAT(b.creationDate, '%Y-%m') = '$month'
     ");
 
@@ -29,7 +32,7 @@ if (isset($_POST['generate_bills'])) {
         $nominatorCount = mysqli_num_rows($nominatorsQuery);
 
         if ($nominatorCount == 0) {
-            $error = "No bookings found for month: $month";
+            $error = "No active bookings found for month: $month";
         } else {
             while ($nominator = mysqli_fetch_array($nominatorsQuery)) {
                 $nominatorID = $nominator['nominatorID'];
@@ -45,14 +48,16 @@ if (isset($_POST['generate_bills'])) {
                     continue;
                 }
 
-                // Get all bookings for this nominator
+                // Get all ACTIVE bookings for this nominator (not cancelled)
                 $bookingsQuery = mysqli_query($con, "
-                    SELECT b.*, cr.courseID, c.title
+                    SELECT b.*, cr.courseID, c.title, cr.status as courseRunStatus
                     FROM booking b
                     JOIN courserun cr ON b.courseRunID = cr.courseRunID
                     JOIN courses c ON cr.courseID = c.courseID
                     WHERE b.nominatorID = $nominatorID
                     AND b.status = 'Confirmed'
+                    AND b.isCanceled = 0  -- Only non-cancelled bookings
+                    AND cr.status != 'Cancelled'  -- Only non-cancelled course runs
                     AND DATE_FORMAT(b.creationDate, '%Y-%m') = '$month'
                 ");
 
@@ -160,7 +165,7 @@ if (isset($_POST['generate_bills'])) {
                         <div class="form-group">
                             <label>Select Month:</label>
                             <input type="month" name="month" class="form-control" value="<?php echo date('Y-m'); ?>" required>
-                            <p class="help-block">This will generate invoices for each Nominating Manager based on all confirmed bookings in the selected month.</p>
+                            <p class="help-block">This will generate invoices for each Nominating Manager based on all ACTIVE (non-cancelled) confirmed bookings in the selected month.</p>
                         </div>
                         <button type="submit" name="generate_bills" class="btn btn-primary btn-lg">
                             <i class="fa fa-file-invoice"></i> Generate All Bills for This Month
@@ -169,37 +174,122 @@ if (isset($_POST['generate_bills'])) {
                 </div>
             </div>
 
+            <!-- Preview Section -->
             <div class="panel panel-default">
-                <div class="panel-heading">Preview: Bookings for Current Month</div>
+                <div class="panel-heading">
+                    <i class="fa fa-eye"></i> Preview: Bookings for Current Month (Active Only)
+                </div>
                 <div class="panel-body">
                     <?php
                     $currentMonth = date('Y-m');
                     $previewQuery = mysqli_query($con, "
-                        SELECT u.username, COUNT(b.bookingID) as booking_count, SUM(b.transferFee) as total_fees
+                        SELECT 
+                            u.username, 
+                            COUNT(b.bookingID) as booking_count, 
+                            SUM(b.transferFee) as total_fees,
+                            GROUP_CONCAT(DISTINCT CONCAT(c.title, ' (', cr.status, ')') SEPARATOR ', ') as course_details
                         FROM booking b
                         JOIN users u ON b.nominatorID = u.id
-                        WHERE b.status = 'Confirmed'
+                        JOIN courserun cr ON b.courseRunID = cr.courseRunID
+                        JOIN courses c ON cr.courseID = c.courseID
+                        WHERE b.status = 'Confirmed' 
+                        AND b.isCanceled = 0  -- Only non-cancelled bookings
+                        AND cr.status != 'Cancelled'  -- Only non-cancelled course runs
                         AND DATE_FORMAT(b.creationDate, '%Y-%m') = '$currentMonth'
                         GROUP BY b.nominatorID
                     ");
 
                     if (mysqli_num_rows($previewQuery) > 0) {
+                        echo "<div class='alert alert-info'><i class='fa fa-info-circle'></i> Showing only ACTIVE bookings (not cancelled)</div>";
                         echo "<table class='table table-striped'>";
-                        echo "<tr><th>Nominator</th><th>Bookings</th><th>Total Amount</th></tr>";
+                        echo "<tr><th>Nominator</th><th>Bookings</th><th>Total Amount</th><th>Courses</th></tr>";
                         while ($row = mysqli_fetch_array($previewQuery)) {
                             echo "<tr>";
-                            echo "<td>{$row['username']}</td>";
+                            echo "<td><strong>{$row['username']}</strong></td>";
                             echo "<td>{$row['booking_count']}</td>";
                             echo "<td>RM " . number_format($row['total_fees'], 2) . "</td>";
+                            echo "<td><small>" . htmlentities($row['course_details']) . "</small></td>";
                             echo "</tr>";
                         }
                         echo "</table>";
                     } else {
-                        echo "<p class='text-muted'>No confirmed bookings found for current month.</p>";
+                        echo "<p class='text-muted'>No active bookings found for current month.</p>";
                     }
                     ?>
                 </div>
             </div>
+
+            <!-- Debug: Show ALL bookings including cancelled -->
+            <!-- <div class="panel panel-default">
+                <div class="panel-heading">
+                    <i class="fa fa-bug"></i> Debug: All Bookings for Current Month (Including Cancelled)
+                </div>
+                <div class="panel-body">
+                    <?php
+                    $debugQuery = mysqli_query($con, "
+                        SELECT 
+                            b.bookingID,
+                            u.username as nominator,
+                            d.username as delegate,
+                            c.title as course,
+                            cr.status as courseRunStatus,
+                            b.isCanceled as bookingCancelled,
+                            b.transferFee,
+                            DATE_FORMAT(b.creationDate, '%Y-%m-%d') as bookingDate
+                        FROM booking b
+                        JOIN users u ON b.nominatorID = u.id
+                        JOIN users d ON b.delegateID = d.id
+                        JOIN courserun cr ON b.courseRunID = cr.courseRunID
+                        JOIN courses c ON cr.courseID = c.courseID
+                        WHERE DATE_FORMAT(b.creationDate, '%Y-%m') = '$currentMonth'
+                        ORDER BY b.isCanceled, u.username, b.creationDate
+                    ");
+
+                    if (mysqli_num_rows($debugQuery) > 0) {
+                        echo "<table class='table table-bordered table-sm'>";
+                        echo "<tr class='active'>
+                                <th>Booking ID</th>
+                                <th>Nominator</th>
+                                <th>Delegate</th>
+                                <th>Course</th>
+                                <th>CourseRun Status</th>
+                                <th>Booking Status</th>
+                                <th>Fee</th>
+                                <th>Date</th>
+                              </tr>";
+                        while ($row = mysqli_fetch_array($debugQuery)) {
+                            $rowClass = '';
+                            if ($row['isCanceled'] == 1) {
+                                $rowClass = 'class="danger"';
+                            } elseif ($row['courseRunStatus'] == 'Cancelled') {
+                                $rowClass = 'class="warning"';
+                            }
+
+                            $bookingStatus = ($row['bookingCancelled'] == 1) ?
+                                '<span class="label label-danger">Cancelled</span>' :
+                                '<span class="label label-success">Active</span>';
+
+                            $courseRunStatus = ($row['courseRunStatus'] == 'Cancelled') ?
+                                '<span class="label label-warning">Cancelled</span>' :
+                                '<span class="label label-info">' . $row['courseRunStatus'] . '</span>';
+
+                            echo "<tr $rowClass>";
+                            echo "<td>{$row['bookingID']}</td>";
+                            echo "<td>{$row['nominator']}</td>";
+                            echo "<td>{$row['delegate']}</td>";
+                            echo "<td>{$row['course']}</td>";
+                            echo "<td>$courseRunStatus</td>";
+                            echo "<td>$bookingStatus</td>";
+                            echo "<td>RM " . number_format($row['transferFee'], 2) . "</td>";
+                            echo "<td>{$row['bookingDate']}</td>";
+                            echo "</tr>";
+                        }
+                        echo "</table>";
+                        echo "<p class='text-muted'><small>Legend: <span class='label label-danger'>Cancelled Booking</span> <span class='label label-warning'>Cancelled CourseRun</span> <span class='label label-success'>Active Booking</span></small></p>";
+                    }
+                    ?>
+                </div>
+            </div> -->
         </div>
     </div>
 

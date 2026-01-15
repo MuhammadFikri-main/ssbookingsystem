@@ -35,7 +35,7 @@ if (strlen($_SESSION['alogin']) == 0) {
     <html xmlns="http://www.w3.org/1999/xhtml">
 
     <head>
-        <title>Admin | Course</title>
+        <title>Course Management</title>
         <link href="../assets/css/bootstrap.css" rel="stylesheet" />
         <link href="../assets/css/font-awesome.css" rel="stylesheet" />
         <link href="../assets/css/style.css" rel="stylesheet" />
@@ -53,58 +53,61 @@ if (strlen($_SESSION['alogin']) == 0) {
             <div class="container">
                 <div class="row">
                     <div class="col-md-12">
-                        <h1 class="page-head-line">Course </h1>
+                        <h1 class="page-head-line">Course</h1>
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-3"></div>
-                    <div class="col-md-6">
-                        <div class="panel panel-default">
-                            <div class="panel-heading">
-                                Course
-                            </div>
-                            <font color="green" align="center"><?php echo htmlentities($_SESSION['msg']); ?><?php echo htmlentities($_SESSION['msg'] = ""); ?></font>
+                <?php if ($_SESSION['role'] == "admin") {
+                ?>
+                    <div class="row">
+                        <div class="col-md-3"></div>
+                        <div class="col-md-6">
+                            <div class="panel panel-default">
+                                <div class="panel-heading">
+                                    Course
+                                </div>
+                                <font color="green" align="center"><?php echo htmlentities($_SESSION['msg']); ?><?php echo htmlentities($_SESSION['msg'] = ""); ?></font>
 
 
-                            <div class="panel-body">
-                                <form name="dept" method="post">
-                                    <div class="form-group">
-                                        <label for="courseTitle">Course Title </label>
-                                        <input type="text" class="form-control" id="courseTitle" name="courseTitle" placeholder="Course Title" required />
-                                    </div>
+                                <div class="panel-body">
+                                    <form name="dept" method="post">
+                                        <div class="form-group">
+                                            <label for="courseTitle">Course Title </label>
+                                            <input type="text" class="form-control" id="courseTitle" name="courseTitle" placeholder="Course Title" required />
+                                        </div>
 
-                                    <div class="form-group">
-                                        <label for="objective">Objective </label>
-                                        <input type="text" class="form-control" id="objective" name="objective" placeholder="Objective" required />
-                                    </div>
+                                        <div class="form-group">
+                                            <label for="objective">Objective </label>
+                                            <input type="text" class="form-control" id="objective" name="objective" placeholder="Objective" required />
+                                        </div>
 
-                                    <div class="form-group">
-                                        <label for="prerequisites">Pre-Requisites </label>
-                                        <input type="text" class="form-control" id="prerequisites" name="prerequisites" placeholder="Pre-Requisites" required />
-                                    </div>
+                                        <div class="form-group">
+                                            <label for="prerequisites">Pre-Requisites </label>
+                                            <input type="text" class="form-control" id="prerequisites" name="prerequisites" placeholder="Pre-Requisites" required />
+                                        </div>
 
-                                    <div class="form-group">
-                                        <label for="durationDays">Duration Days </label>
-                                        <input type="text" class="form-control" id="durationDays" name="durationDays" placeholder="Duration Days" required />
-                                    </div>
+                                        <div class="form-group">
+                                            <label for="durationDays">Duration Days </label>
+                                            <input type="text" class="form-control" id="durationDays" name="durationDays" placeholder="Duration Days" required />
+                                        </div>
 
-                                    <div class="form-group">
-                                        <label for="maxStudents">Max Student </label>
-                                        <input type="text" class="form-control" id="maxStudents" name="maxStudents" placeholder="Max Student" required />
-                                    </div>
+                                        <div class="form-group">
+                                            <label for="maxStudents">Max Student </label>
+                                            <input type="text" class="form-control" id="maxStudents" name="maxStudents" placeholder="Max Student" required />
+                                        </div>
 
-                                    <div class="form-group">
-                                        <label for="staffLevel">Staff Level </label>
-                                        <input type="text" class="form-control" id="staffLevel" name="staffLevel" placeholder="Staff Level" required />
-                                    </div>
+                                        <div class="form-group">
+                                            <label for="staffLevel">Staff Level </label>
+                                            <input type="text" class="form-control" id="staffLevel" name="staffLevel" placeholder="Staff Level" required />
+                                        </div>
 
-                                    <button type="submit" name="submit" class="btn btn-default">Submit</button>
-                                </form>
+                                        <button type="submit" name="submit" class="btn btn-default">Submit</button>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>
-
-                </div>
+                <?php }
+                ?>
                 <font color="red" align="center"><?php echo htmlentities($_SESSION['delmsg']); ?><?php echo htmlentities($_SESSION['delmsg'] = ""); ?></font>
                 <div class="col-md-12">
                     <!--    Bordered Table  -->
@@ -125,7 +128,11 @@ if (strlen($_SESSION['alogin']) == 0) {
                                             <th>Duration Days</th>
                                             <th>Max Students</th>
                                             <th>Staff Level</th>
-                                            <th>Action</th>
+                                            <?php if ($_SESSION['role'] == "admin") {
+                                            ?>
+                                                <th>Action</th>
+                                            <?php }
+                                            ?>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -142,13 +149,17 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 <td><?php echo htmlentities($row['durationDays']); ?></td>
                                                 <td><?php echo htmlentities($row['maxStudents']); ?></td>
                                                 <td><?php echo htmlentities($row['staffLevel']); ?></td>
-                                                <td>
-                                                    <a href="edit-course.php?id=<?php echo $row['courseID'] ?>">
-                                                        <button class="btn btn-primary"><i class="fa fa-edit "></i> Edit</button> </a>
-                                                    <a href="course.php?id=<?php echo $row['courseID'] ?>&del=delete" onClick="return confirm('Are you sure you want to delete?')">
-                                                        <button class="btn btn-danger">Delete</button>
-                                                    </a>
-                                                </td>
+                                                <?php if ($_SESSION['role'] == "admin") {
+                                                ?>
+                                                    <td>
+                                                        <a href="edit-course.php?id=<?php echo $row['courseID'] ?>">
+                                                            <button class="btn btn-primary"><i class="fa fa-edit "></i> Edit</button> </a>
+                                                        <a href="course.php?id=<?php echo $row['courseID'] ?>&del=delete" onClick="return confirm('Are you sure you want to delete?')">
+                                                            <button class="btn btn-danger">Delete</button>
+                                                        </a>
+                                                    </td>
+                                                <?php }
+                                                ?>
                                             </tr>
                                         <?php
                                             $cnt++;

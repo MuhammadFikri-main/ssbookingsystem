@@ -155,9 +155,9 @@ if (strlen($_SESSION['alogin']) == 0) {
                             <div class="panel-heading">
                                 <i class="fa fa-users"></i> Nominations for this Course
                                 <div class="pull-right">
-                                    <a href="student-registration.php" class="btn btn-primary btn-xs">
+                                    <!-- <a href="student-registration.php" class="btn btn-primary btn-xs">
                                         <i class="fa fa-plus"></i> Add New Nomination
-                                    </a>
+                                    </a> -->
                                 </div>
                             </div>
                             <div class="panel-body">
@@ -175,8 +175,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                     <th>Nominator</th>
                                                     <th>Delegate</th>
                                                     <th>Date Nominated</th>
-                                                    <th>Status</th>
-                                                    <th>Actions</th>
+                                                    <!-- <th>Status</th>
+                                                    <th>Actions</th> -->
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -194,6 +194,8 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 LEFT JOIN users n ON w.nominatorID = n.id
                                                 LEFT JOIN users d ON w.delegateID = d.id
                                                 WHERE w.courseID = $courseID
+                                                AND w.isBooked = 0
+                                                AND w.isDeleted = 0
                                                 ORDER BY w.creationDate DESC
                                             ");
 
@@ -226,7 +228,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                             <small class="text-muted"><?php echo htmlentities($row['delegate_role']); ?></small>
                                                         </td>
                                                         <td><?php echo date('d-m-Y', strtotime($row['creationDate'])); ?></td>
-                                                        <td>
+                                                        <!-- <td>
                                                             <span class="label label-<?php echo $statusClass; ?>">
                                                                 <?php echo htmlentities($row['status']); ?>
                                                             </span>
@@ -262,7 +264,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                                     <i class="fa fa-trash"></i>
                                                                 </a>
                                                             </div>
-                                                        </td>
+                                                        </td> -->
                                                     </tr>
                                                 <?php
                                                     $cnt++;
