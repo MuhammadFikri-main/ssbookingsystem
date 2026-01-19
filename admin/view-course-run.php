@@ -197,6 +197,7 @@ if (strlen($_SESSION['alogin']) == 0) {
                                                 LEFT JOIN users n ON b.nominatorID = n.id
                                                 LEFT JOIN users d ON b.delegateID = d.id
                                                 WHERE cr.courseID = $courseID
+                                                AND cr.courseRunID = $courseRunID
                                                 AND b.isCanceled = 0
                                                 ORDER BY b.creationDate DESC
                                             ");

@@ -77,7 +77,7 @@ if (isset($_POST['submit'])) {
                     </div>
             </form>
             <div class="col-md-6">
-                <img src="../assets/img/admin.png" class="img-responsive">
+                <!-- <img src="../assets/img/admin.png" class="img-responsive"> -->
             </div>
 
         </div>
